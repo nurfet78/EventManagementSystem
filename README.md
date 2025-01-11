@@ -59,6 +59,7 @@ spring.mail.properties.mail.smtp.starttls.enable=true
 ## API Endpoints
 
 ### Помещения
+* GET /api/rooms - получить все помещения
 * POST /api/rooms - Регистрация помещения
 * GET /api/rooms/available - Получение списка доступных помещений
 * GET /api/rooms/{id} - Получение информации о помещении
@@ -66,6 +67,7 @@ spring.mail.properties.mail.smtp.starttls.enable=true
 * DELETE /api/rooms/{id} - Удаление помещения
 
 ### Мероприятия
+* GET /api/events - получить все мероприятия
 * POST /api/events - Регистрация мероприятия
 * GET /api/events/between - Получение списка мероприятий за период
 * GET /api/events/{id} - Получение информации о мероприятии

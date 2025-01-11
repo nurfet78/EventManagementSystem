@@ -16,7 +16,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static org.nurfet.eventmanagementapplication.service.ParticipantService.getParticipantDTO;
@@ -28,55 +27,139 @@ public class EventService {
     private final RoomRepository roomRepository;
     private final ParticipantRepository participantRepository;
 
-    @Transactional
-    public EventDTO createEvent(EventDTO dto) {
-        validateEventTimes(dto);
-
-        Room room = roomRepository.findById(dto.getRoomId())
-                .orElseThrow(() -> new ResourceNotFoundException("Помещение не найдено"));
-
-        validateRoomAvailability(room.getId(), dto.getStartTime(), dto.getEndTime());
-
-        Event event = new Event();
-        event.setName(dto.getName());
-        event.setStartTime(dto.getStartTime());
-        event.setEndTime(dto.getEndTime());
-        event.setRoom(room);
-
-        event = eventRepository.save(event);
-        return convertToDTO(event);
-    }
-
-    private void validateRoomAvailability(Long roomId, LocalDateTime startTime, LocalDateTime endTime) {
-        if (eventRepository.existsOverlappingEvent(roomId, startTime, endTime)) {
-            throw new IllegalArgumentException("Помещение уже забронировано на это время");
-        }
-    }
-
-    public List<EventDTO> getEventsBetweenDates(LocalDateTime start, LocalDateTime end) {
-        return eventRepository.findEventsBetweenDates(start, end)
-                .stream()
+    public List<EventDTO> getAllEvents() {
+        return eventRepository.findAllByDeletedFalse().stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
     }
 
+    @Transactional
+    public EventDTO createEvent(EventDTO dto) {
+        validateEventTimes(dto);
+        Room room = getRoomById(dto.getRoomId());
+        validateRoomAvailability(null, room.getId(), dto.getStartTime(), dto.getEndTime());
+
+        Event event = new Event();
+        updateEventFields(event, dto, room);
+        event = eventRepository.save(event);
+        return convertToDTO(event);
+    }
+
+    @Transactional
+    public EventDTO updateEvent(Long id, EventDTO dto) {
+        Event event = getEventEntityById(id);
+        Room room = getRoomById(dto.getRoomId());
+
+        validateEventTimes(dto);
+        validateRoomAvailability(id, room.getId(), dto.getStartTime(), dto.getEndTime());
+
+        updateEventFields(event, dto, room);
+        event = eventRepository.save(event);
+        return convertToDTO(event);
+    }
+
+    @Transactional
+    public void deleteEvent(Long id) {
+        Event event = getEventEntityById(id);
+        event.setDeleted(true);
+        eventRepository.save(event);
+    }
+
     public EventDTO getEvent(Long id) {
-        return eventRepository.findByIdAndDeletedFalse(id)
-                .map(this::convertToDTO)
-                .orElseThrow(() -> new ResourceNotFoundException("Событие не найдено"));
+        return convertToDTO(getEventEntityById(id));
+    }
+
+    public List<ParticipantDTO> getEventParticipants(Long eventId) {
+        Event event = getEventEntityById(eventId);
+        return event.getParticipants().stream()
+                .filter(participant -> !participant.isDeleted())
+                .map(this::convertToParticipantDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public ParticipantDTO registerParticipant(Long eventId, EventRegistrationDTO registrationDTO) {
+        Event event = getEventEntityById(eventId);
+
+        if (event.getEndTime().isBefore(LocalDateTime.now())) {
+            throw new IllegalStateException("Невозможно зарегистрироваться на прошедшее мероприятие");
+        }
+
+        Participant participant = getOrCreateParticipant(registrationDTO);
+
+        if (event.getParticipants().contains(participant)) {
+            throw new IllegalStateException("Участник уже зарегистрирован на это мероприятие");
+        }
+
+        event.getParticipants().add(participant);
+        eventRepository.save(event);
+        return convertToParticipantDTO(participant);
     }
 
     private void validateEventTimes(EventDTO dto) {
-        LocalDateTime now = LocalDateTime.now();
-
         if (dto.getEndTime().isBefore(dto.getStartTime())) {
             throw new IllegalArgumentException("Время окончания не может быть раньше времени начала");
         }
 
-        // При создании события проверяем, что оно в будущем
-        if (dto.getStartTime().isBefore(now.toLocalDate().atStartOfDay())) {
+        if (dto.getStartTime().isBefore(LocalDateTime.now().toLocalDate().atStartOfDay())) {
             throw new IllegalArgumentException("Дата начала не может быть в прошлом");
         }
+    }
+
+    private void validateRoomAvailability(Long eventId, Long roomId, LocalDateTime startTime, LocalDateTime endTime) {
+        List<Event> eventsInRoom = eventRepository.findByRoomIdAndDeletedFalse(roomId);
+
+        boolean isOccupied = eventsInRoom.stream()
+                .filter(event -> !event.getId().equals(eventId))
+                .anyMatch(event ->
+                        startTime.isBefore(event.getEndTime()) &&
+                                endTime.isAfter(event.getStartTime())
+                );
+
+        if (isOccupied) {
+            throw new IllegalStateException("Помещение уже забронировано на это время");
+        }
+    }
+
+    private void updateEventFields(Event event, EventDTO dto, Room room) {
+        event.setName(dto.getName());
+        event.setStartTime(dto.getStartTime());
+        event.setEndTime(dto.getEndTime());
+        event.setRoom(room);
+    }
+
+    private Room getRoomById(Long roomId) {
+        return roomRepository.findByIdAndDeletedFalse(roomId)
+                .orElseThrow(() -> new ResourceNotFoundException("Помещение не найдено"));
+    }
+
+    private Event getEventEntityById(Long id) {
+        return eventRepository.findByIdAndDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Событие не найдено"));
+    }
+
+    private Participant getOrCreateParticipant(EventRegistrationDTO dto) {
+        return participantRepository.findByEmail(dto.getEmail())
+                .map(participant -> validateExistingParticipant(participant, dto))
+                .orElseGet(() -> createNewParticipant(dto));
+    }
+
+    private Participant validateExistingParticipant(Participant participant, EventRegistrationDTO dto) {
+        if (!participant.getFirstName().equals(dto.getFirstName()) ||
+                !participant.getLastName().equals(dto.getLastName()) ||
+                !participant.getPhone().equals(dto.getPhone())) {
+            throw new IllegalStateException("Участник с таким email уже существует. Указанные данные не совпадают с существующими");
+        }
+        return participant;
+    }
+
+    private Participant createNewParticipant(EventRegistrationDTO dto) {
+        Participant participant = new Participant();
+        participant.setFirstName(dto.getFirstName());
+        participant.setLastName(dto.getLastName());
+        participant.setEmail(dto.getEmail());
+        participant.setPhone(dto.getPhone());
+        return participantRepository.save(participant);
     }
 
     private EventDTO convertToDTO(Event event) {
@@ -86,112 +169,30 @@ public class EventService {
         dto.setStartTime(event.getStartTime());
         dto.setEndTime(event.getEndTime());
         dto.setRoomId(event.getRoom().getId());
+        dto.setRoomName(event.getRoom().getName());
         return dto;
-    }
-
-    public List<Event> getUpcomingEvents() {
-        LocalDateTime start = LocalDateTime.now();
-        LocalDateTime end = start.plusDays(1);
-        return eventRepository.findEventsBetweenDates(start, end);
-    }
-
-    @Transactional
-    public void deleteEvent(Long id) {
-        Event event = eventRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Событие не найдено"));
-
-        // Мягкое удаление
-        eventRepository.softDelete(id);
-    }
-
-    @Transactional
-    public ParticipantDTO registerParticipant(Long eventId, EventRegistrationDTO registrationDTO) {
-        Event event = eventRepository.findByIdAndDeletedFalse(eventId)
-                .orElseThrow(() -> new ResourceNotFoundException("Событие не найдено"));
-
-        // Проверяем, не прошло ли событие
-        if (event.getEndTime().isBefore(LocalDateTime.now())) {
-            throw new IllegalStateException("Невозможно зарегистрироваться на прошедшее мероприятие");
-        }
-
-        // Ищем существующего участника
-        Optional<Participant> existingParticipant = participantRepository.findByEmail(registrationDTO.getEmail());
-
-        if (existingParticipant.isPresent()) {
-            Participant participant = existingParticipant.get();
-            // Проверяем, совпадают ли данные существующего участника
-            if (!participant.getFirstName().equals(registrationDTO.getFirstName()) ||
-                    !participant.getLastName().equals(registrationDTO.getLastName()) ||
-                    !participant.getPhone().equals(registrationDTO.getPhone())) {
-                throw new IllegalStateException("Участник с таким email уже существует. Указанные данные не совпадают с существующими");
-            }
-
-            // Проверяем, не зарегистрирован ли уже участник на это событие
-            if (event.getParticipants().contains(participant)) {
-                throw new IllegalStateException("Участник уже зарегистрирован на это мероприятие");
-            }
-
-            // Добавляем существующего участника к событию
-            event.getParticipants().add(participant);
-            eventRepository.save(event);
-            return convertToParticipantDTO(participant);
-        } else {
-            // Создаем нового участника
-            Participant participant = new Participant();
-            participant.setFirstName(registrationDTO.getFirstName());
-            participant.setLastName(registrationDTO.getLastName());
-            participant.setEmail(registrationDTO.getEmail());
-            participant.setPhone(registrationDTO.getPhone());
-            participant = participantRepository.save(participant);
-
-            // Добавляем нового участника к событию
-            event.getParticipants().add(participant);
-            eventRepository.save(event);
-            return convertToParticipantDTO(participant);
-        }
     }
 
     private ParticipantDTO convertToParticipantDTO(Participant participant) {
         return getParticipantDTO(participant);
     }
 
-    @Transactional
-    public EventDTO updateEvent(Long id, EventDTO dto) {
-        Event event = eventRepository.findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Событие не найдено"));
-
-        // При обновлении проверяем только логику времени (конец после начала)
-        if (dto.getEndTime().isBefore(dto.getStartTime())) {
-            throw new IllegalArgumentException("Время окончания не может быть раньше времени начала");
+    public List<EventDTO> getEventsBetweenDates(LocalDateTime start, LocalDateTime end) {
+        if (start.isAfter(end)) {
+            throw new IllegalArgumentException("Дата начала не может быть позже даты окончания");
         }
 
-        // Если меняется помещение или время, проверяем доступность
-        if (!event.getRoom().getId().equals(dto.getRoomId()) ||
-                !event.getStartTime().equals(dto.getStartTime()) ||
-                !event.getEndTime().equals(dto.getEndTime())) {
-
-            Room newRoom = roomRepository.findByIdAndDeletedFalse(dto.getRoomId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Помещение не найдено"));
-
-            validateRoomAvailability(newRoom.getId(), dto.getStartTime(), dto.getEndTime());
-            event.setRoom(newRoom);
-        }
-
-        event.setName(dto.getName());
-        event.setStartTime(dto.getStartTime());
-        event.setEndTime(dto.getEndTime());
-
-        event = eventRepository.save(event);
-        return convertToDTO(event);
+        return eventRepository.findEventsBetweenDates(start, end).stream()
+                .filter(event -> !event.isDeleted())
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
     }
 
-    public List<ParticipantDTO> getEventParticipants(Long eventId) {
-        Event event = eventRepository.findByIdAndDeletedFalse(eventId)
-                .orElseThrow(() -> new ResourceNotFoundException("Событие не найдено"));
+    public List<Event> getUpcomingEvents() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime todayStart = now.toLocalDate().atStartOfDay();
+        LocalDateTime tomorrowEnd = todayStart.plusDays(2);
 
-        return event.getParticipants().stream()
-                .filter(participant -> !participant.isDeleted())
-                .map(this::convertToParticipantDTO)
-                .collect(Collectors.toList());
+        return eventRepository.findUpcomingEvents(todayStart, tomorrowEnd);
     }
 }

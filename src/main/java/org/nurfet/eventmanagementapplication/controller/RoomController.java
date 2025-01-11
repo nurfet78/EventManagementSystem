@@ -18,7 +18,14 @@ import java.util.Map;
 @RequestMapping("/api/rooms")
 @RequiredArgsConstructor
 public class RoomController {
+
     private final RoomService roomService;
+
+    @GetMapping
+    public ResponseEntity<List<RoomDTO>> getAllRooms() {
+        List<RoomDTO> rooms = roomService.getAllRooms();
+        return ResponseEntity.ok(rooms);
+    }
 
     @PostMapping
     public ResponseEntity<RoomDTO> createRoom(@Valid @RequestBody RoomDTO roomDTO) {

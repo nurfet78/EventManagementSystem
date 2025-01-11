@@ -2,8 +2,8 @@ package org.nurfet.eventmanagementapplication.repository;
 
 import org.nurfet.eventmanagementapplication.model.Event;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -19,14 +19,22 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     @Query("SELECT e FROM Event e JOIN e.participants p WHERE p.id = :participantId AND e.deleted = false")
     List<Event> findByParticipantId(Long participantId);
 
-    @Query("SELECT COUNT(e) > 0 FROM Event e WHERE e.deleted = false AND e.room.id = :roomId " +
-            "AND ((e.startTime <= :endTime) AND (e.endTime >= :startTime))")
-    boolean existsOverlappingEvent(Long roomId, LocalDateTime startTime, LocalDateTime endTime);
-
-    @Modifying
-    @Query("UPDATE Event e SET e.deleted = true WHERE e.id = :id")
-    void softDelete(Long id);
-
     @Query("SELECT e FROM Event e WHERE e.id = :id AND e.deleted = false")
-    Optional<Event> findByIdAndDeletedFalse(Long id);
+    Optional<Event> findByIdAndDeletedFalse(@Param("id") Long id);
+
+    @Query("SELECT e FROM Event e WHERE e.room.id = :roomId AND e.deleted = false")
+    List<Event> findByRoomIdAndDeletedFalse(@Param("roomId") Long roomId);
+
+    @Query("SELECT e FROM Event e WHERE e.deleted = false")
+    List<Event> findAllByDeletedFalse();
+
+    @Query("SELECT e FROM Event e " +
+            "WHERE e.startTime BETWEEN :start AND :end " +
+            "AND e.deleted = false " +
+            "AND e.startTime > CURRENT_TIMESTAMP " +
+            "ORDER BY e.startTime")
+    List<Event> findUpcomingEvents(
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end
+    );
 }

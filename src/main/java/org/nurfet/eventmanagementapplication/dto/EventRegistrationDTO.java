@@ -19,7 +19,7 @@ public class EventRegistrationDTO {
     @NotBlank(message = "Поле email должно быть заполнено")
     private String email;
 
-    @Pattern(regexp = "^\\+7\\(\\d{3}\\)\\d{3}-\\d{2}-\\d{2}$",
+    @Pattern(regexp = "^\\+7\\s*\\(\\s*\\d{3}\\s*\\)\\s*\\d{3}\\s*-\\s*\\d{2}\\s*-\\s*\\d{2}$",
             message = "Номер телефона должен соответствовать формату: +7(XXX)XXX-XX-XX")
     private String phone;
 }

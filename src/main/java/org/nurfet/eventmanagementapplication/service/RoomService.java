@@ -106,4 +106,11 @@ public class RoomService {
         room = roomRepository.save(room);
         return convertToDTO(room);
     }
+
+    public List<RoomDTO> getAllRooms() {
+        return roomRepository.findAll().stream()
+                .filter(room -> !room.isDeleted())
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
 }

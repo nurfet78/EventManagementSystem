@@ -24,4 +24,6 @@ public class EventDTO {
 
     @NotNull(message = "Требуется идентификатор помещения")
     private Long roomId;
+
+    private String roomName;
 }
