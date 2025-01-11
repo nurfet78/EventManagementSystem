@@ -72,6 +72,7 @@ spring.mail.properties.mail.smtp.starttls.enable=true
 * PUT /api/events/{id} - Обновление информации о мероприятии
 * DELETE /api/events/{id} - Удаление мероприятия
 * POST /api/events/{id}/register - Регистрация участника на мероприятие
+* GET /api/events/{Id}/participants - Получить список всех участников мероприятия
 
 ### Участники
 * GET /api/participants/{id} - Получение информации об участнике

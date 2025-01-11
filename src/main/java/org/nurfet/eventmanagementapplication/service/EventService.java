@@ -114,26 +114,41 @@ public class EventService {
             throw new IllegalStateException("Невозможно зарегистрироваться на прошедшее мероприятие");
         }
 
-        // Проверяем, не используется ли email другим участником
+        // Ищем существующего участника
         Optional<Participant> existingParticipant = participantRepository.findByEmail(registrationDTO.getEmail());
 
         if (existingParticipant.isPresent()) {
-            throw new IllegalStateException("Email уже используется другим участником");
+            Participant participant = existingParticipant.get();
+            // Проверяем, совпадают ли данные существующего участника
+            if (!participant.getFirstName().equals(registrationDTO.getFirstName()) ||
+                    !participant.getLastName().equals(registrationDTO.getLastName()) ||
+                    !participant.getPhone().equals(registrationDTO.getPhone())) {
+                throw new IllegalStateException("Участник с таким email уже существует. Указанные данные не совпадают с существующими");
+            }
+
+            // Проверяем, не зарегистрирован ли уже участник на это событие
+            if (event.getParticipants().contains(participant)) {
+                throw new IllegalStateException("Участник уже зарегистрирован на это мероприятие");
+            }
+
+            // Добавляем существующего участника к событию
+            event.getParticipants().add(participant);
+            eventRepository.save(event);
+            return convertToParticipantDTO(participant);
+        } else {
+            // Создаем нового участника
+            Participant participant = new Participant();
+            participant.setFirstName(registrationDTO.getFirstName());
+            participant.setLastName(registrationDTO.getLastName());
+            participant.setEmail(registrationDTO.getEmail());
+            participant.setPhone(registrationDTO.getPhone());
+            participant = participantRepository.save(participant);
+
+            // Добавляем нового участника к событию
+            event.getParticipants().add(participant);
+            eventRepository.save(event);
+            return convertToParticipantDTO(participant);
         }
-
-        // Создаем нового участника
-        Participant participant = new Participant();
-        participant.setFirstName(registrationDTO.getFirstName());
-        participant.setLastName(registrationDTO.getLastName());
-        participant.setEmail(registrationDTO.getEmail());
-        participant.setPhone(registrationDTO.getPhone());
-        participant = participantRepository.save(participant);
-
-        // Добавляем участника к событию
-        event.getParticipants().add(participant);
-        eventRepository.save(event);
-
-        return convertToParticipantDTO(participant);
     }
 
     private ParticipantDTO convertToParticipantDTO(Participant participant) {
@@ -168,5 +183,15 @@ public class EventService {
 
         event = eventRepository.save(event);
         return convertToDTO(event);
+    }
+
+    public List<ParticipantDTO> getEventParticipants(Long eventId) {
+        Event event = eventRepository.findByIdAndDeletedFalse(eventId)
+                .orElseThrow(() -> new ResourceNotFoundException("Событие не найдено"));
+
+        return event.getParticipants().stream()
+                .filter(participant -> !participant.isDeleted())
+                .map(this::convertToParticipantDTO)
+                .collect(Collectors.toList());
     }
 }

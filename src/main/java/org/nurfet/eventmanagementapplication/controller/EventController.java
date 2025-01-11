@@ -67,4 +67,17 @@ public class EventController {
         response.put("message", String.format("Мероприятие с идентификатором %d успешно обновлено", id));
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/{eventId}/participants")
+    public ResponseEntity<Object> getEventParticipants(@PathVariable Long eventId) {
+        List<ParticipantDTO> participants = eventService.getEventParticipants(eventId);
+
+        if (participants.isEmpty()) {
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "На данное мероприятие ещё нет зарегистрированных участников");
+            return ResponseEntity.ok(response);
+        }
+
+        return ResponseEntity.ok(participants);
+    }
 }
