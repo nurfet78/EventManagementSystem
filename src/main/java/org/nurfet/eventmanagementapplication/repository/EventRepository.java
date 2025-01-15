@@ -13,7 +13,7 @@ import java.util.Optional;
 @Repository
 public interface EventRepository extends JpaRepository<Event, Long> {
 
-    @Query("SELECT e FROM Event e WHERE e.deleted = false AND e.startTime BETWEEN :start AND :end")
+    @Query("SELECT e FROM Event e WHERE e.deleted = false AND e.startTime < :end AND e.endTime > :start")
     List<Event> findEventsBetweenDates(LocalDateTime start, LocalDateTime end);
 
     @Query("SELECT e FROM Event e JOIN e.participants p WHERE p.id = :participantId AND e.deleted = false")

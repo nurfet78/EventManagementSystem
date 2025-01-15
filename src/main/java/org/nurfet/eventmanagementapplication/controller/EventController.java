@@ -2,6 +2,7 @@ package org.nurfet.eventmanagementapplication.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.nurfet.eventmanagementapplication.dto.EventDTO;
 import org.nurfet.eventmanagementapplication.dto.EventRegistrationDTO;
 import org.nurfet.eventmanagementapplication.dto.ParticipantDTO;
@@ -15,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/events")
 @RequiredArgsConstructor

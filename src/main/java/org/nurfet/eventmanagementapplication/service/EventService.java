@@ -110,10 +110,10 @@ public class EventService {
         List<Event> eventsInRoom = eventRepository.findByRoomIdAndDeletedFalse(roomId);
 
         boolean isOccupied = eventsInRoom.stream()
-                .filter(event -> !event.getId().equals(eventId))
+                .filter(event -> eventId == null || !event.getId().equals(eventId)) // Изменили условие
                 .anyMatch(event ->
-                        startTime.isBefore(event.getEndTime()) &&
-                                endTime.isAfter(event.getStartTime())
+                        (startTime.isBefore(event.getEndTime()) || startTime.equals(event.getEndTime())) &&
+                                (endTime.isAfter(event.getStartTime()) || endTime.equals(event.getStartTime()))
                 );
 
         if (isOccupied) {
