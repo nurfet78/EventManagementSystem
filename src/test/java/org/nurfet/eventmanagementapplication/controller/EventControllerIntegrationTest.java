@@ -1,5 +1,6 @@
 package org.nurfet.eventmanagementapplication.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -7,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.nurfet.eventmanagementapplication.dto.EventDTO;
 import org.nurfet.eventmanagementapplication.dto.EventRegistrationDTO;
+import org.nurfet.eventmanagementapplication.dto.ParticipantDTO;
 import org.nurfet.eventmanagementapplication.dto.RoomDTO;
 import org.nurfet.eventmanagementapplication.repository.EventRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,9 +26,8 @@ import io.restassured.RestAssured;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 
@@ -111,12 +112,10 @@ public class EventControllerIntegrationTest {
     }
 
     @Test
-    void endToEndTest_ShouldRegisterParticipantSuccessfully() throws Exception {
-        // 1. Создание помещения
+    void registerParticipant_Success() throws Exception {
 
         RoomDTO createdRoom = createRoom("Конференц-зал А", 50);
 
-        // 2. Создание мероприятия
         EventDTO createdEvent = createEvent(
                 "Конференция по Spring",
                 LocalDateTime.now().plusDays(1).withHour(10).withMinute(0),
@@ -124,14 +123,14 @@ public class EventControllerIntegrationTest {
                 createdRoom.getId()
         );
 
-
         EventRegistrationDTO registrationDTO = new EventRegistrationDTO();
         registrationDTO.setFirstName("Иван");
         registrationDTO.setLastName("Петров");
         registrationDTO.setEmail("ivan@example.com");
         registrationDTO.setPhone("+7(999)999-99-99");
 
-        String responseContent = mockMvc.perform(post("/api/events/1/register")
+
+        String responseContent = mockMvc.perform(post("/api/events/" + createdEvent.getId() + "/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(registrationDTO)))
                 .andExpect(status().isOk())
@@ -139,8 +138,23 @@ public class EventControllerIntegrationTest {
                 .getResponse()
                 .getContentAsString();
 
-        String message = objectMapper.readTree(responseContent).get("message").asText();
-        assertEquals("Участник Иван Петров успешно зарегистрирован на мероприятии с идентификатором 1", message);
+        JsonNode responseJson = objectMapper.readTree(responseContent);
+
+        // Извлекаем message
+        String message = responseJson.get("message").asText();
+
+        // Извлекаем объект participant
+        ParticipantDTO participant = objectMapper.treeToValue(responseJson.get("participant"), ParticipantDTO.class);
+
+        // Проверяем сообщение
+        assertEquals(String.format("Участник %s %s успешно зарегистрирован на мероприятии с идентификатором %d",
+                participant.getFirstName(), participant.getLastName(), createdEvent.getId()), message);
+
+        // Проверяем данные участника
+        assertEquals(registrationDTO.getFirstName(), participant.getFirstName());
+        assertEquals(registrationDTO.getLastName(), participant.getLastName());
+        assertEquals(registrationDTO.getEmail(), participant.getEmail());
+        assertEquals(registrationDTO.getPhone(), participant.getPhone());
     }
 
     @Test
@@ -175,5 +189,16 @@ public class EventControllerIntegrationTest {
                 .andExpect(jsonPath("$[0].endTime").value(createdEvent.getEndTime().toString()))
                 .andExpect(jsonPath("$[0].roomId").value(createdRoom.getId()))
                 .andExpect(jsonPath("$[0].roomName").value(createdRoom.getName()));
+    }
+
+    @Test
+    void deleteRoomById_Successfully() throws Exception {
+        RoomDTO createdRoom = createRoom("Конференц-зал А", 50);
+
+        mockMvc.perform(delete("/api/rooms/" + createdRoom.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(
+                        String.format("Помещение с идентификатором %d было успешно удалено", createdRoom.getId())
+                ));
     }
 }

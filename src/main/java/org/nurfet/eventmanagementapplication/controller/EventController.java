@@ -55,13 +55,18 @@ public class EventController {
     }
 
     @PostMapping("/{eventId}/register")
-    public ResponseEntity<Map<String, String>> registerParticipant(
+    public ResponseEntity<Map<String, Object>> registerParticipant(
             @PathVariable Long eventId,
             @Valid @RequestBody EventRegistrationDTO registrationDTO) {
+
         ParticipantDTO participant = eventService.registerParticipant(eventId, registrationDTO);
-        Map<String, String> response = new HashMap<>();
+
+        Map<String, Object> response = new HashMap<>();
+
         response.put("message", String.format("Участник %s %s успешно зарегистрирован на мероприятии с идентификатором %d",
                 participant.getFirstName(), participant.getLastName(), eventId));
+        response.put("participant", participant);
+
         return ResponseEntity.ok(response);
     }
 

@@ -2,11 +2,15 @@ package org.nurfet.eventmanagementapplication.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
+@AllArgsConstructor
+@NoArgsConstructor
 public class EventRegistrationDTO {
 
     @NotBlank(message = "Необходимо указать имя")
